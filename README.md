@@ -1,163 +1,96 @@
-# 📝 WhatsApp Voice Note Transcriber
+# Whisp
 
-A lightweight Chrome extension that transcribes WhatsApp Web voice notes **100% offline and free** using Whisper AI running directly in your browser.
+A Chrome extension that transcribes WhatsApp Web voice notes locally in your browser using Whisper AI. No API keys, no servers, no data leaving your machine. The Whisper model runs entirely in-browser via WebAssembly.
 
-No API keys. No subscriptions. No data leaves your machine.
+After the first run downloads the model (~40MB), everything works offline.
 
----
+## What it does
 
-## ✨ Features
+- Adds a "Transcribe" button next to every voice note on WhatsApp Web
+- Runs OpenAI's Whisper (tiny, quantized) directly in the browser through Transformers.js
+- Saves transcriptions locally and lets you search, copy, and export them from the extension popup
+- Respects WhatsApp's dark theme automatically
 
-- **📝 One-click transcribe** — "Transcribe" button appears next to every voice note
-- **🔒 Fully private** — All processing happens locally in your browser
-- **💰 100% free** — No API keys, no usage limits, no subscriptions
-- **📴 Works offline** — After first model download (~40MB, cached permanently)
-- **📋 Copy & export** — Copy individual notes or export all as a text file
-- **🔍 Search notes** — Search through all your transcriptions from the popup
-- **🌙 Dark mode** — Matches WhatsApp's dark theme automatically
+## Setup
 
----
+You need Node.js (v18+) and Chrome.
 
-## 🚀 Setup (5 minutes)
-
-### Prerequisites
-- [Node.js](https://nodejs.org/) (v18+)
-- Google Chrome browser
-
-### Step 1: Install dependencies
-```bash
-cd whatsapp-voice-notes
-npm install
 ```
-
-### Step 2: Build the extension
-```bash
+npm install
 npm run build
 ```
-This copies the Transformers.js library into the `lib/` folder.
 
-### Step 3: Load in Chrome
-1. Open Chrome and go to `chrome://extensions`
-2. Enable **Developer mode** (toggle in top-right)
-3. Click **"Load unpacked"**
-4. Select the `whatsapp-voice-notes` folder
-5. Done! The extension icon appears in your toolbar
+The build step copies Transformers.js and its WASM files into `lib/` so the extension can load them.
 
-### Step 4: Use it
-1. Go to [web.whatsapp.com](https://web.whatsapp.com)
-2. Open any chat with voice notes
-3. Click the green **"📝 Transcribe"** button next to any voice note
-4. First use downloads the Whisper model (~40MB, cached after that)
-5. Transcription appears below the voice note!
+Then load it in Chrome:
 
----
+1. Go to `chrome://extensions`
+2. Turn on Developer mode (top right)
+3. Click "Load unpacked" and select this project folder
+4. Open WhatsApp Web and click the Transcribe button on any voice note
 
-## 📦 Publishing to Chrome Web Store
+The first transcription takes about 30 seconds while the model downloads. After that it's cached and works instantly.
 
-### One-time setup (costs $5)
-
-1. **Register as a developer** at [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole)
-2. Pay the **one-time $5 registration fee**
-3. Verify your identity
-
-### Prepare your extension
-
-1. Create a ZIP of the extension:
-   ```bash
-   # Make sure you've run npm install && npm run build first
-   zip -r whatsapp-voice-notes.zip . \
-     -x "node_modules/*" \
-     -x ".git/*" \
-     -x "setup.js" \
-     -x "package.json" \
-     -x "package-lock.json" \
-     -x "generate_icons.py" \
-     -x "*.md"
-   ```
-
-2. You'll need these assets for the listing:
-   - **Screenshots** (1280x800 or 640x400) — take screenshots of the extension working on WhatsApp Web
-   - **Promo images** — small tile (440x280)
-   - **Description** — use the feature list from this README
-
-### Submit for review
-
-1. Go to the [Developer Dashboard](https://chrome.google.com/webstore/devconsole)
-2. Click **"New Item"**
-3. Upload your `.zip` file
-4. Fill in:
-   - **Name**: WhatsApp Voice Note Transcriber
-   - **Category**: Productivity
-   - **Language**: English
-   - **Description**: (copy from above)
-   - **Screenshots**: (from step 2)
-5. Under **Privacy**:
-   - Single purpose: "Transcribes WhatsApp voice notes to text"
-   - Permissions justification: explain why each permission is needed
-   - Data use: "All processing happens locally. No data is collected or transmitted."
-6. Click **"Submit for review"**
-
-### Review timeline
-- Usually **1-3 business days**
-- Sometimes up to a week for first submissions
-- You'll get an email when approved
-
----
-
-## 🗂️ Project Structure
+## Project structure
 
 ```
-whatsapp-voice-notes/
-├── manifest.json       # Extension config (MV3)
-├── background.js       # Service worker — message relay
-├── content.js          # Injected into WhatsApp Web — UI injection
-├── styles.css          # Styles for transcribe button & results
-├── offscreen.html      # Offscreen document host
-├── offscreen.js        # Runs Whisper model via Transformers.js
-├── popup.html          # Extension popup — view/search/export notes
-├── popup.js            # Popup logic
-├── lib/                # (generated) Transformers.js bundle
-├── icons/              # Extension icons
-├── package.json        # Dependencies
-├── setup.js            # Build script
-└── README.md           # This file
+whisp/
+  manifest.json          Chrome extension manifest (MV3)
+  package.json           Dependencies and build scripts
+  src/
+    background.js        Service worker, relays messages between content script and offscreen document
+    content.js           Injected into WhatsApp Web, finds voice notes and adds the transcribe UI
+    content.css          Styles for the transcribe button and result text
+    offscreen.html       Host page for the offscreen document
+    offscreen.js         Loads the Whisper model via Transformers.js and runs transcription
+    popup.html           Extension popup, shows saved transcriptions
+    popup.js             Popup logic: search, copy, export, delete
+  assets/
+    icons/               Extension icons (16, 48, 128px)
+  scripts/
+    setup.js             Build script that copies Transformers.js into lib/
+  lib/                   (generated) Transformers.js bundle and WASM files
 ```
 
----
+## How it works
 
-## ⚙️ Configuration
+Chrome extensions can't run heavy computation in service workers, so the architecture uses three layers:
 
-### Change language
-In `offscreen.js`, edit the language parameter:
+1. **Content script** (`content.js`) runs on WhatsApp Web. It watches the DOM for voice note elements, injects a Transcribe button, and extracts the audio as base64 when clicked.
+
+2. **Background service worker** (`background.js`) receives the audio from the content script and forwards it to an offscreen document. It also manages storing transcriptions in `chrome.storage.local`.
+
+3. **Offscreen document** (`offscreen.js`) is where the actual work happens. It loads the Whisper model through Transformers.js, resamples the audio to 16kHz mono using the Web Audio API, and runs the transcription.
+
+## Configuration
+
+To change the transcription language, edit `src/offscreen.js`:
+
 ```js
 const result = await model(audioFloat32, {
-  language: 'en',       // Change to 'es', 'fr', 'de', 'hi', 'pt', etc.
-  task: 'transcribe',   // Use 'translate' to translate to English
+  language: 'en',       // change to 'es', 'fr', 'de', 'hi', 'pt', etc.
+  task: 'transcribe',   // use 'translate' to translate everything to English
 });
 ```
 
-### Use a larger model (more accurate, slower)
-In `offscreen.js`, change the model name:
-```js
-// Options (bigger = more accurate but slower first load):
-'onnx-community/whisper-tiny'    // ~40MB  — fast, good enough
-'onnx-community/whisper-base'    // ~75MB  — better accuracy
-'onnx-community/whisper-small'   // ~250MB — best accuracy for in-browser
+To use a more accurate (but larger) model, change the model name in the same file:
+
+```
+onnx-community/whisper-tiny     ~40MB, fast, good enough for most voice notes
+onnx-community/whisper-base     ~75MB, better accuracy
+onnx-community/whisper-small    ~250MB, best you can reasonably run in a browser
 ```
 
----
+## Troubleshooting
 
-## 🐛 Troubleshooting
+**No Transcribe button appears** -- Refresh WhatsApp Web. WhatsApp occasionally changes their DOM structure, which may break the selectors in `content.js`.
 
-| Issue | Fix |
-|-------|-----|
-| No "Transcribe" button appears | Refresh WhatsApp Web. WhatsApp may have changed their DOM structure. |
-| "No audio found" error | Click play on the voice note first, then click Transcribe. |
-| Model download stuck | Check your internet for the first download. It's cached after that. |
-| Extension not working after Chrome update | Go to `chrome://extensions` → click the refresh icon on the extension. |
+**"No audio found" error** -- Click play on the voice note first, then click Transcribe. WhatsApp lazy-loads the audio element.
 
----
+**Model download hangs** -- Needs an internet connection for the first download only. After that it's cached in the browser.
 
-## 📄 License
+**Extension stops working after a Chrome update** -- Go to `chrome://extensions` and click the refresh icon on the extension.
 
-MIT — free to use, modify, and distribute.
+## License
+
+MIT

@@ -1,5 +1,5 @@
 // offscreen.js — Runs Whisper transcription in offscreen document
-import { pipeline } from './lib/transformers.min.js';
+import { pipeline } from '../lib/transformers.min.js';
 
 let transcriber = null;
 let isLoading = false;

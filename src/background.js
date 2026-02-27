@@ -16,7 +16,7 @@ async function ensureOffscreen() {
   }
 
   await chrome.offscreen.createDocument({
-    url: 'offscreen.html',
+    url: 'src/offscreen.html',
     reasons: ['WORKERS'],
     justification: 'Run Whisper model for voice note transcription'
   });

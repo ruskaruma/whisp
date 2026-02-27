@@ -1,11 +1,11 @@
 {
-  "name": "whatsapp-voice-note-transcriber",
+  "name": "whisp",
   "version": "1.0.0",
   "description": "Chrome extension to transcribe WhatsApp voice notes offline using Whisper",
   "private": true,
   "scripts": {
-    "setup": "node setup.js",
-    "build": "node setup.js"
+    "setup": "node scripts/setup.js",
+    "build": "node scripts/setup.js"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.4.0"
